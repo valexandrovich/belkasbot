@@ -230,7 +230,7 @@ public class RatesDB {
         public static int getEmailsCount(int userID) {
             int emailsCount = 0;
             try {
-                final PreparedStatement preparedStatement = connection.prepareStatement("SELECT COUNT(email)FROM tb_rates_user_email WHERE userID = ? ORDER BY insertDate DESC");
+                final PreparedStatement preparedStatement = connection.prepareStatement("SELECT COUNT(email)FROM tb_rates_user_email WHERE userID = ?");
                 preparedStatement.setInt(1, userID);
                 final ResultSet resultSet = preparedStatement.executeQuery();
                 if (resultSet.next()){
