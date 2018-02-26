@@ -125,7 +125,7 @@ public class RatesDB {
         String userEmail = null;
         ArrayList<String> userEmails = new ArrayList<>();
         try {
-                final PreparedStatement preparedStatement = connection.prepareStatement("SELECT email FROM tb_rates_user_email WHERE userID = ? ORDER BY insertDate DESC");
+                final PreparedStatement preparedStatement = connection.prepareStatement("SELECT email FROM tb_rates_user_email WHERE userID = ? GROUP BY user_id, email, insertdate ORDER BY insertDate DESC");
                 preparedStatement.setInt(1, userID);
                 final ResultSet resultSet = preparedStatement.executeQuery();
                 while (resultSet.next()){
