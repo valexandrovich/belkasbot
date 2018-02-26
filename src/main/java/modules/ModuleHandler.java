@@ -4,7 +4,9 @@ import configs.BotConfigs;
 import database.AccountManager;
 import modules.language.LanguageModule;
 import modules.rates.RatesModule;
+import org.telegram.telegrambots.api.methods.send.SendDocument;
 import org.telegram.telegrambots.api.methods.send.SendMessage;
+import org.telegram.telegrambots.api.methods.send.SendPhoto;
 import org.telegram.telegrambots.api.objects.Update;
 import org.telegram.telegrambots.api.objects.replykeyboard.ReplyKeyboardMarkup;
 import org.telegram.telegrambots.api.objects.replykeyboard.ReplyKeyboardRemove;
@@ -14,6 +16,7 @@ import org.telegram.telegrambots.exceptions.TelegramApiException;
 import services.LocalizationService;
 import services.LoggerService;
 
+import java.io.File;
 import java.util.LinkedList;
 
 public class ModuleHandler extends TelegramLongPollingBot {
@@ -43,6 +46,11 @@ public class ModuleHandler extends TelegramLongPollingBot {
         String messageText = "";
         String callbackData = "";
         int userState = 0;
+
+
+
+
+
         if (update.hasMessage()) {
             userID = update.getMessage().getFrom().getId();
             chatID = update.getMessage().getChatId();
@@ -53,6 +61,21 @@ public class ModuleHandler extends TelegramLongPollingBot {
             chatID = update.getCallbackQuery().getMessage().getChatId();
             callbackData = update.getCallbackQuery().getData();
         }
+
+
+        // region Easter Eggs
+        if (update.hasMessage() && update.getMessage().getText().toLowerCase().equals("брухля")){
+            ClassLoader classLoader = ModuleHandler.class.getClassLoader();
+            SendDocument sendDocument = new SendDocument()
+                    .setChatId(chatID)
+                    .setNewDocument( new File(classLoader.getResource("up4kman.gif").getFile()) );
+            try {
+                new ModuleHandler().sendDocument(sendDocument);
+            } catch (TelegramApiException e) {
+                e.printStackTrace();
+            }
+        }
+        // endregion
 
         // Checking on Simple Command
         if (messageText.length()>0 && simpleCommands.contains(messageText)){
