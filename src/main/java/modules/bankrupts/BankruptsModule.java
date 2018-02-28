@@ -1,9 +1,7 @@
-package modules.language;
+package modules.bankrupts;
 
 import configs.BotConfigs;
-import database.AccountManager;
 import modules.IModule;
-import modules.ModuleHandler;
 import org.telegram.telegrambots.api.methods.send.SendMessage;
 import org.telegram.telegrambots.api.objects.CallbackQuery;
 import org.telegram.telegrambots.api.objects.Message;
@@ -13,65 +11,52 @@ import org.telegram.telegrambots.api.objects.replykeyboard.buttons.KeyboardRow;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.exceptions.TelegramApiException;
 import services.LocalizationService;
-import services.LoggerService;
 
+import java.io.IOException;
 import java.util.LinkedList;
-import java.util.List;
 
-public class LanguageModule extends TelegramLongPollingBot implements IModule {
+public class BankruptsModule extends TelegramLongPollingBot implements IModule {
 
-    private final static String LOGTAG = "LanguageModule";
-    private List<LocalizationService.Language> languageList;
-
+    private final String LOGTAG = "BankruptsModule";
+    private final Object lock = new Object();
     @Override
     public String getModuleTitle(int userID) {
-        return LocalizationService.getString(getModuleCode()+"_Title", userID);
+        return LocalizationService.getString("3_Title", userID);
     }
 
     @Override
     public int getModuleCode() {
-        return 91;
+        return 3;
     }
 
     @Override
     public void handle(Update update) throws Throwable {
-        if (update.hasMessage()){
-            handleMessage(update.getMessage());
-        } else if (update.hasCallbackQuery()){
-            handleCallbackQuery(update.getCallbackQuery());
-        } else {
-            LoggerService.logError(LOGTAG, new Throwable(LOGTAG + "can't reconize update type"));
+        synchronized (lock) {
+            if (update.hasMessage()) {
+                handleMessage(update.getMessage());
+            } else if (update.hasCallbackQuery()) {
+                handleCallbackQuery(update.getCallbackQuery());
+            }
         }
     }
 
-    public void handleMessage(Message message) throws TelegramApiException {
+    @Override
+    public void handleMessage(Message message) throws TelegramApiException, IOException {
         int userID = message.getFrom().getId();
         long chatID = message.getChatId();
         SendMessage sendMessage = new SendMessage()
                 .setChatId(chatID);
+
         if (checkModuleEnering(message.getText(), userID)){
-            sendMessage.setText(LocalizationService.getString(getModuleCode()+"_Welcome", userID))
+            sendMessage.setText(LocalizationService.getString("3_Welcome", userID))
                     .setReplyMarkup(getModuleMenu(userID));
             execute(sendMessage);
-
-        } else {
-
-            for (LocalizationService.Language language : languageList){
-                if (message.getText().equals(language.toString())){
-                    if (AccountManager.setUserLanguage(userID, language.getCode())){
-                        ModuleHandler.sendMainMenu(userID, chatID);
-                        return;
-                    }
-                }
-            }
-
-
-
         }
-
     }
+
+    @Override
     public void handleCallbackQuery(CallbackQuery callbackQuery) throws Throwable {
-        throw new Throwable("Can't handle CallbackQuery");
+
     }
 
     @Override
@@ -82,29 +67,26 @@ public class LanguageModule extends TelegramLongPollingBot implements IModule {
         }
         return moduleEntering;
     }
-    public  ReplyKeyboardMarkup getModuleMenu(int userID){
+
+    @Override
+    public ReplyKeyboardMarkup getModuleMenu(int userID) {
         ReplyKeyboardMarkup replyKeyboardMarkup = new ReplyKeyboardMarkup();
         LinkedList<KeyboardRow> rows = new LinkedList<>();
-        languageList = LocalizationService.getSupportedLanguages();
-        for (LocalizationService.Language language : languageList){
-                KeyboardRow row = new KeyboardRow();
-                row.add(language.toString());
-                rows.add(row);
-        }
-        KeyboardRow row = new KeyboardRow();
-        row.add(LocalizationService.getString("SimpleCommandMainMenu", userID));
-        rows.add(row);
+
+        KeyboardRow rowMainMenuRow = new KeyboardRow();
+        rowMainMenuRow.add(LocalizationService.getString("SimpleCommandMainMenu", userID));
+        rows.add(rowMainMenuRow);
+
         replyKeyboardMarkup.setResizeKeyboard(true);
         replyKeyboardMarkup.setKeyboard(rows);
         return replyKeyboardMarkup;
-
-
     }
 
-    // region Override Bot Methods
+
+    // region Bot Method Overrite
     @Override
     public void onUpdateReceived(Update update) {
-        System.out.println("Язык модуль тоже получил апдейт!! :(  ");
+
     }
 
     @Override
@@ -116,6 +98,5 @@ public class LanguageModule extends TelegramLongPollingBot implements IModule {
     public String getBotToken() {
         return BotConfigs.getBotToken();
     }
-
-    //endregion
+    // endregion
 }

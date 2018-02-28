@@ -15,7 +15,6 @@ import java.util.*;
  */
 public class LocalizationService {
     private static final String STRINGS_FILE = "strings";
-    private static final String LOGTAG = "LocalizationService";
     private static final Object lock = new Object();
 
     private static final List<Language> supportedLanguages = new ArrayList<>();
@@ -51,7 +50,6 @@ public class LocalizationService {
         try {
             result = english.getString(key);
         } catch (MissingResourceException e) {
-            LoggerService.logError(LOGTAG, e);
             result = "String not found";
         }
 
@@ -81,13 +79,11 @@ public class LocalizationService {
             }
         } catch (MissingResourceException e) {
             result = english.getString(key);
-            LoggerService.logError(LOGTAG, e);
         }
 
        try{
            return emoji.getString(key) + " " +  result;
        } catch (MissingResourceException e){
-            LoggerService.logError(LOGTAG, e);
            return result;
        }
 

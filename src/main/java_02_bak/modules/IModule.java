@@ -17,7 +17,7 @@ public interface IModule {
     void handleMessage(Message message) throws TelegramApiException, IOException;
     void handleCallbackQuery(CallbackQuery callbackQuery) throws Throwable;
 
-    boolean checkModuleEnering(String messageText, int userID);
+
     ReplyKeyboardMarkup getModuleMenu(int userID);
 
 }

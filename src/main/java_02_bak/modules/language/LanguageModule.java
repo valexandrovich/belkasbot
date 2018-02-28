@@ -25,7 +25,7 @@ public class LanguageModule extends TelegramLongPollingBot implements IModule {
 
     @Override
     public String getModuleTitle(int userID) {
-        return LocalizationService.getString(getModuleCode()+"_Title", userID);
+        return LocalizationService.getString(getModuleCode()+"_title", userID);
     }
 
     @Override
@@ -49,8 +49,8 @@ public class LanguageModule extends TelegramLongPollingBot implements IModule {
         long chatID = message.getChatId();
         SendMessage sendMessage = new SendMessage()
                 .setChatId(chatID);
-        if (checkModuleEnering(message.getText(), userID)){
-            sendMessage.setText(LocalizationService.getString(getModuleCode()+"_Welcome", userID))
+        if (message.getText().equals(getModuleTitle(userID))){
+            sendMessage.setText(LocalizationService.getString(getModuleCode()+"_welcome", userID))
                     .setReplyMarkup(getModuleMenu(userID));
             execute(sendMessage);
 
@@ -70,18 +70,11 @@ public class LanguageModule extends TelegramLongPollingBot implements IModule {
         }
 
     }
+
     public void handleCallbackQuery(CallbackQuery callbackQuery) throws Throwable {
         throw new Throwable("Can't handle CallbackQuery");
     }
 
-    @Override
-    public boolean checkModuleEnering(String messageText, int userID) {
-        boolean moduleEntering = false;
-        if (messageText.equals(LocalizationService.getString(getModuleCode()+"_Title", userID))){
-            moduleEntering = true;
-        }
-        return moduleEntering;
-    }
     public  ReplyKeyboardMarkup getModuleMenu(int userID){
         ReplyKeyboardMarkup replyKeyboardMarkup = new ReplyKeyboardMarkup();
         LinkedList<KeyboardRow> rows = new LinkedList<>();
@@ -92,7 +85,7 @@ public class LanguageModule extends TelegramLongPollingBot implements IModule {
                 rows.add(row);
         }
         KeyboardRow row = new KeyboardRow();
-        row.add(LocalizationService.getString("SimpleCommandMainMenu", userID));
+        row.add(LocalizationService.getString("simpleCommandMainMenu", userID));
         rows.add(row);
         replyKeyboardMarkup.setResizeKeyboard(true);
         replyKeyboardMarkup.setKeyboard(rows);
@@ -101,7 +94,6 @@ public class LanguageModule extends TelegramLongPollingBot implements IModule {
 
     }
 
-    // region Override Bot Methods
     @Override
     public void onUpdateReceived(Update update) {
         System.out.println("Язык модуль тоже получил апдейт!! :(  ");
@@ -116,6 +108,4 @@ public class LanguageModule extends TelegramLongPollingBot implements IModule {
     public String getBotToken() {
         return BotConfigs.getBotToken();
     }
-
-    //endregion
 }

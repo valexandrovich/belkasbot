@@ -13,22 +13,19 @@ public class BelkaBot extends TelegramLongPollingBot {
 
     @Override
     public void onUpdateReceived(Update update) {
-        long chatID = 0;
-        if (update.hasMessage()) {
-            currentUser = update.getMessage().getFrom();
-            chatID = update.getMessage().getChatId();
-        }
-        if (update.hasCallbackQuery()){
-            currentUser = update.getCallbackQuery().getFrom();
-            chatID = update.getCallbackQuery().getMessage().getChatId();
-        }
+        if (update.hasMessage()) {currentUser = update.getMessage().getFrom();}
+        if (update.hasCallbackQuery()){currentUser = update.getCallbackQuery().getFrom();}
 
         if (!AccountManager.isSessionExist(currentUser.getId())){
-            AccountManager.createSession(currentUser, chatID);
+            AccountManager.createUser(currentUser);
         }
 
         ModuleHandler.handle(update);
 
+//        if (update.getMessage().getText().equals("+")) { RatesDB.incrementCursor(update.getMessage().getFrom().getId());}
+//        if (update.getMessage().getText().equals("-")) { RatesDB.decrementCursor(update.getMessage().getFrom().getId());}
+//        if (update.getMessage().getText().contains("@")) { RatesDB.addUserEmail(update.getMessage().getFrom().getId(), update.getMessage().getText());}
+//        System.out.println(RatesDB.getCurrentEmail(update.getMessage().getFrom().getId()));
 
     }
 

@@ -1,6 +1,5 @@
 package database;
 
-import modules.rates.RatesDB;
 import org.telegram.telegrambots.api.objects.User;
 import services.LoggerService;
 
@@ -19,7 +18,7 @@ public class AccountManager {
     }
 
 
-    public static boolean isSessionExist(int userID) {
+    public static boolean isSessionExist(int userID){
         boolean exist = false;
         try {
             final PreparedStatement preparedStatement = connection.prepareStatement("SELECT userID FROM tb_users WHERE userID = ?");
@@ -27,14 +26,14 @@ public class AccountManager {
             final ResultSet result = preparedStatement.executeQuery();
             if (result.next()) {
                 exist = true;
-                LoggerService.logInfo(LOGTAG, "User exist " + getUserName(userID));
+                LoggerService.logInfo(LOGTAG, userID + " user exist");
             }
         } catch (SQLException e) {
             LoggerService.logError(LOGTAG, e);
         }
         return exist;
     }
-    public static boolean createSession(User user, long chatID){
+    public static boolean createUser(User user){
         int updatedRows = 0;
         try{
             final PreparedStatement preparedStatement = connection.prepareStatement("INSERT INTO tb_users VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
@@ -44,42 +43,17 @@ public class AccountManager {
             preparedStatement.setBoolean(4, user.getBot());
             preparedStatement.setString(5, user.getUserName());
             preparedStatement.setString(6,  nvl(user.getLanguageCode(), "ru-ru"));
-            preparedStatement.setLong(7, chatID);
+            preparedStatement.setLong(7, 0);
             preparedStatement.setInt(8, 0);
             preparedStatement.setTimestamp(9, new Timestamp(System.currentTimeMillis()));
             preparedStatement.setLong(10, 0);
             updatedRows = preparedStatement.executeUpdate();
-            LoggerService.logAction(LOGTAG,  getUserName(user.getId())
-                    +"Creating new session");
-
-            // additional initialize
-
-            RatesDB.initializeDefaulCurrenciesForUser(user.getId());
-
+            LoggerService.logAction(LOGTAG,  user.getId() + " " + user.getFirstName() + " " + user.getLastName() + " creating user");
         } catch (SQLException e) {
             LoggerService.logError(LOGTAG, e);
         }
         return updatedRows>0;
     }
-
-    public static String getUserName(int userID){
-        String userName = "";
-        try{
-            final PreparedStatement preparedStatement = connection.prepareStatement("SELECT userID, firstname, lastname FROM tb_users WHERE userID = ?");
-            preparedStatement.setInt(1, userID);
-            final ResultSet resultSet = preparedStatement.executeQuery();
-            if (resultSet.next()){
-                userName = resultSet.getInt(1) + " "
-                        + resultSet.getString(2) + " "
-                        + resultSet.getString(3)
-                        +" : ";
-            }
-        } catch (SQLException e) {
-            LoggerService.logError(LOGTAG, e);
-        }
-        return userName;
-    }
-
     public static int getUserState(int userID){
         int userState = 0;
 
@@ -102,8 +76,7 @@ public class AccountManager {
             preparedStatement.setInt(1, state);
             preparedStatement.setInt(2, userID);
             updatedRows = preparedStatement.executeUpdate();
-            if (updatedRows>0) {LoggerService.logAction(LOGTAG, getUserName(userID)
-                    + "Set new user state = " + state);}
+            if (updatedRows>0) {LoggerService.logAction(LOGTAG, "Change user " + userID + " state to " + state);}
         } catch (SQLException e) {
             LoggerService.logError(LOGTAG, e);
         }
@@ -132,8 +105,7 @@ public class AccountManager {
             preparedStatement.setString(1, languageCode);
             preparedStatement.setInt(2, userID);
             updatedRows = preparedStatement.executeUpdate();
-            if (updatedRows>0) {LoggerService.logAction(LOGTAG,  getUserName(userID)
-                    +"Change user languageCode to " + languageCode);}
+            if (updatedRows>0) {LoggerService.logAction(LOGTAG, "Change user " + userID + " languageCode to " + languageCode);}
         } catch (SQLException e) {
             LoggerService.logError(LOGTAG, e);
         }
@@ -150,7 +122,7 @@ public class AccountManager {
                 lastCallbackMessageID = resultSet.getLong(1);
             }
         } catch (SQLException e) {
-            LoggerService.logError(LOGTAG, e);
+            e.printStackTrace();
         }
         return lastCallbackMessageID;
     }
@@ -161,10 +133,8 @@ public class AccountManager {
             preparedStatement.setLong(1, messageID);
             preparedStatement.setInt(2, userID);
             updatedRows = preparedStatement.executeUpdate();
-            LoggerService.logAction(LOGTAG, getUserName(userID)
-                    + "Set lastCallbackMessageID = " + messageID);
         } catch (SQLException e) {
-            LoggerService.logError(LOGTAG, e);
+            e.printStackTrace();
         }
         return updatedRows>0;
     }

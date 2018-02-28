@@ -4,267 +4,256 @@ import database.ConnectorDB;
 import services.LoggerService;
 
 import java.sql.*;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 
 public class RatesDB {
     private static final String LOGTAG = "RatesDB";
     private static volatile Connection connection;
-    private static final SimpleDateFormat shortDate = new SimpleDateFormat("dd.MM.yyyy");
     private static ArrayList<String> defaultCurrencies = new ArrayList<>();
 
+    // Due to Singletone
     private RatesDB(){}
 
     static {
-        LoggerService.logInfo(LOGTAG, "initialize connection");
-        defaultCurrencies.add("USD");
-        defaultCurrencies.add("EUR");
-        defaultCurrencies.add("CHF");
-        defaultCurrencies.add("RUB");
         if (connection == null) {
-            connection  = ConnectorDB.getConnection();
+            connection = ConnectorDB.getConnection();
+            LoggerService.logInfo(LOGTAG, "Initialize connection");
         }
+
+        if (defaultCurrencies.size() == 0){
+            defaultCurrencies.add("USD");
+            defaultCurrencies.add("EUR");
+            defaultCurrencies.add("CHF");
+            defaultCurrencies.add("RUB");
+        }
+
     }
 
-
-    public static boolean addUserCurrency(int userID, String ccy){
-        int insertedRows = 0;
-        try{
-            final PreparedStatement preparedStatement = connection.prepareStatement("INSERT INTO tb_rates_user_currencies VALUES (? , ?)");
-            preparedStatement.setInt(1, userID);
-            preparedStatement.setString(2, ccy);
-            insertedRows = preparedStatement.executeUpdate();
-        } catch (SQLException e) {
-            LoggerService.logError(LOGTAG, e);
-        }
-        return insertedRows>0;
-    }
-    public static boolean removeUserCurrency(int userID, String ccy){
-        int insertedRows = 0;
-        try{
-            final PreparedStatement preparedStatement = connection.prepareStatement("DELETE FROM tb_rates_user_currencies WHERE userID = ? AND ccy = ?");
-            preparedStatement.setInt(1, userID);
-            preparedStatement.setString(2, ccy);
-            insertedRows = preparedStatement.executeUpdate();
-        } catch (SQLException e) {
-            LoggerService.logError(LOGTAG, e);
-        }
-        return insertedRows>0;
-    }
     public static ArrayList<String> getUserCurrencies(int userID){
         ArrayList<String> userCurrencies = new ArrayList<>();
         try{
             final PreparedStatement preparedStatement = connection.prepareStatement("SELECT ccy FROM tb_rates_user_currencies WHERE userID = ?");
             preparedStatement.setInt(1, userID);
-            ResultSet resultSet = preparedStatement.executeQuery();
+            final ResultSet resultSet = preparedStatement.executeQuery();
             while (resultSet.next()){
                 userCurrencies.add(resultSet.getString(1));
             }
-            if (userCurrencies.size()<1){
-                setDefaultCurrencies(userID);
-                resultSet = preparedStatement.executeQuery();
-                while (resultSet.next()){
-                    userCurrencies.add(resultSet.getString(1));
-                }
-            }
+
         } catch (SQLException e) {
             LoggerService.logError(LOGTAG, e);
         }
         return userCurrencies;
     }
-    private static boolean setDefaultCurrencies(int userID){
-        int insertedRows = 0;
+    public static boolean removeUserCurrency(int userID, String ccy){
+        int removedRows = 0;
+        try{
+            final PreparedStatement preparedStatement = connection.prepareStatement("DELETE FROM tb_rates_user_currencies WHERE userID = ? AND ccy = ?");
+            preparedStatement.setInt(1, userID);
+            preparedStatement.setString(2, ccy);
+            removedRows = preparedStatement.executeUpdate();
+        } catch (SQLException e) {
+           LoggerService.logError(LOGTAG, e);
+        }
+        return removedRows>0;
+    }
+    public static boolean addUserCurrency(int userID, String ccy){
+        int addedRows = 0;
         try {
-            if (defaultCurrencies.size() > 0) {
-                final PreparedStatement preparedStatement = connection.prepareStatement("INSERT INTO tb_rates_user_currencies VALUES (? , ?)");
-                preparedStatement.setInt(1, userID);
-                for (String ccy : defaultCurrencies){
-                    preparedStatement.setString(2, ccy);
-                    insertedRows+=preparedStatement.executeUpdate();
-                }
-            }
+            final PreparedStatement preparedStatement = connection.prepareStatement("INSERT INTO tb_rates_user_currencies VALUES (?, ?)");
+            preparedStatement.setInt(1, userID);
+            preparedStatement.setString(2, ccy);
+            addedRows = preparedStatement.executeUpdate();
         } catch (SQLException e) {
             LoggerService.logError(LOGTAG, e);
         }
-        return insertedRows>0;
+        return addedRows>0;
     }
 
-
-    public static boolean addRatesResponce(int userID, Timestamp rateDate){
-        int insertedRow = 0;
-        try {
-            final PreparedStatement preparedStatement = connection.prepareStatement("INSERT INTO tb_rates_response VALUES (?, ?, ?)");
+    public static boolean initializeDefaulCurrenciesForUser(int userID){
+        int insertedRows = 0;
+        try{
+            final PreparedStatement preparedStatement = connection.prepareStatement("INSERT INTO tb_rates_user_currencies VALUES (?, ?)");
             preparedStatement.setInt(1, userID);
-            preparedStatement.setTimestamp(2, rateDate);
-            preparedStatement.setTimestamp(3, new Timestamp(System.currentTimeMillis()));
-            insertedRow = preparedStatement.executeUpdate();
+            preparedStatement.setString(2, "USD");
+            insertedRows +=  preparedStatement.executeUpdate();
+
+            preparedStatement.setString(2, "EUR");
+            insertedRows += preparedStatement.executeUpdate();
+
+            preparedStatement.setString(2, "CHF");
+            insertedRows += preparedStatement.executeUpdate();
+
+            preparedStatement.setString(2, "RUB");
+            insertedRows += preparedStatement.executeUpdate();
+
+            preparedStatement.setString(2, "PLN");
+            insertedRows += preparedStatement.executeUpdate();
+
+            preparedStatement.setString(2, "HUF");
+            insertedRows += preparedStatement.executeUpdate();
         } catch (SQLException e) {
             e.printStackTrace();
         }
-        return insertedRow>0;
+        return insertedRows>0;
     }
-    public static Timestamp getLastResponseDate(int userID){
-        Timestamp lastDate = new Timestamp(System.currentTimeMillis());
-        try{
-            final PreparedStatement preparedStatement = connection.prepareStatement("SELECT rateDate FROM tb_rates_response WHERE userID = ? ORDER BY insertDate DESC");
+
+    public static String getCurrentUserEmail(int userID){
+        String currentEmail = "";
+        int currentCursor = getEmailCursor(userID);
+        try {
+            final PreparedStatement preparedStatement = connection.prepareStatement("SELECT email FROM tb_rates_user_email WHERE userID = ? ORDER by insertdate DESC");
             preparedStatement.setInt(1, userID);
             final ResultSet resultSet = preparedStatement.executeQuery();
 
-            if (resultSet.next()){
-                lastDate = resultSet.getTimestamp(1);
+            for (int i = 0; i <= currentCursor ; i++) {
+                resultSet.next();
             }
+            currentEmail = resultSet.getString(1);
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            LoggerService.logError(LOGTAG, e);
         }
-        return lastDate;
-    }
 
-    // region Email
-        public static String getCurrentEmail(int userID) {
-        String userEmail = null;
+        return currentEmail;
+    }
+    public static ArrayList<String> getUserEmails (int userID){
         ArrayList<String> userEmails = new ArrayList<>();
         try {
-                final PreparedStatement preparedStatement = connection.prepareStatement("SELECT email FROM tb_rates_user_email WHERE userID = ? GROUP BY userID, email, insertdate ORDER BY insertDate DESC");
-                preparedStatement.setInt(1, userID);
-                final ResultSet resultSet = preparedStatement.executeQuery();
-                while (resultSet.next()){
-                    userEmails.add(resultSet.getString(1));
-                }
-
-                if (userEmails.size()<1){
-                    return userEmail;
-                } else if (userEmails.size() == 1){
-                    return userEmails.get(0);
-                }
-                userEmail = userEmails.get(getEmailCursor(userID));
-
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-            return userEmail;
-        }
-        public static boolean addUserEmail(int userID, String email){
-        int insertedRows = 0;
-        try {
-            final PreparedStatement preparedStatement = connection.prepareStatement("INSERT INTO tb_rates_user_email VALUES (?, ?, ?)");
-            preparedStatement.setInt(1, userID);
-            preparedStatement.setString(2, email);
-            preparedStatement.setTimestamp(3, new Timestamp(System.currentTimeMillis()));
-            insertedRows = preparedStatement.executeUpdate();
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-
-
-            setEmailCursor(userID, 0);
-
-
-        return insertedRows>0;
-    }
-        public static boolean removeUserEmail(int userID){
-            String currentEmail = getCurrentEmail(userID);
-            int deletedRows = 0;
-            try {
-                final PreparedStatement preparedStatement = connection.prepareStatement("DELETE FROM tb_rates_user_email WHERE userID = ? AND email = ?");
-                preparedStatement.setInt(1, userID);
-                preparedStatement.setString(2, currentEmail);
-                deletedRows = preparedStatement.executeUpdate();
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-            return deletedRows>0;
-
-        }
-        @Deprecated
-        public static ArrayList<String> getUserEmails(int userID){
-        ArrayList<String> userEmails = new ArrayList<>();
-        try {
-            final PreparedStatement preparedStatement = connection.prepareStatement("SELECT email FROM tb_user_email WHERE userID = ? ORDER BY insertDate DESC");
+            final PreparedStatement preparedStatement = connection.prepareStatement("SELECT email FROM tb_rates_user_email WHERE userID = ? ORDER BY insertdate DESC");
             preparedStatement.setInt(1, userID);
             final ResultSet resultSet = preparedStatement.executeQuery();
             while (resultSet.next()){
                 userEmails.add(resultSet.getString(1));
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            LoggerService.logError(LOGTAG, e);
         }
         return userEmails;
+    }
+    public static int getEmailsCount (int userID){
+        int userEmailsCount = 0;
+        try {
+            final PreparedStatement preparedStatement = connection.prepareStatement("SELECT count(email) FROM tb_rates_user_email WHERE userID = ? ");
+            preparedStatement.setInt(1, userID);
+            final ResultSet resultSet = preparedStatement.executeQuery();
+            if (resultSet.next()){
+                userEmailsCount = resultSet.getInt(1);
+            }
+        } catch (SQLException e) {
+            LoggerService.logError(LOGTAG, e);
+        }
+        return userEmailsCount;
+    }
+    public static boolean addUserEmail (int userID, String email){
+        int addedRows = 0;
+        try {
+            final PreparedStatement preparedStatement = connection.prepareStatement("INSERT  INTO tb_rates_user_email VALUES (?, ?, ?)");
+            preparedStatement.setInt(1, userID);
+            preparedStatement.setString(2, email);
+            preparedStatement.setTimestamp(3, new Timestamp(System.currentTimeMillis()));
+            addedRows = preparedStatement.executeUpdate();
+            // Setting 0 - pointer if first email
+            if (getEmailsCount(userID) == 1){
+                setEmailCursor(userID, 0);
+            }
+            /////////////////////////////////////
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return addedRows>0;
+    }
+    public static boolean removeUserEmail(int userID, String email){
+        int deletedRows = 0;
+        try {
+            final PreparedStatement preparedStatement = connection.prepareStatement("DELETE FROM tb_rates_user_email WHERE userID = ? AND email = ?");
+            preparedStatement.setInt(1, userID);
+            preparedStatement.setString(2, email);
+            deletedRows = preparedStatement.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return deletedRows>0;
+    }
+
+
+    public static boolean setEmailCursor(int userID, int cursor){
+        int addedRows = 0;
+        try{
+            PreparedStatement preparedStatement = connection.prepareStatement("DELETE FROM tb_rates_email_cursor WHERE userID = ?");
+            preparedStatement.setInt(1, userID);
+            preparedStatement.executeUpdate();
+
+            preparedStatement = null;
+            preparedStatement = connection.prepareStatement("INSERT INTO tb_rates_email_cursor VALUES (?, ?)");
+            preparedStatement.setInt(1, userID);
+            preparedStatement.setInt(2, cursor);
+            addedRows = preparedStatement.executeUpdate();
+        } catch (SQLException e) {
+            LoggerService.logError(LOGTAG, e);
+        }
+        return  addedRows>0;
+    }
+    public static int getEmailCursor(int userID){
+        int cursor = 0;
+        try {
+            final PreparedStatement preparedStatement = connection.prepareStatement("SELECT pointer FROM tb_rates_email_cursor WHERE userID = ?");
+            preparedStatement.setInt(1, userID);
+            final ResultSet resultSet = preparedStatement.executeQuery();
+            if (resultSet.next()){
+                cursor = resultSet.getInt(1);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return cursor;
+    }
+    public static boolean incrementEmailCursor(int userID){
+        boolean isIncrement = false;
+        int currentCursor = getEmailCursor(userID);
+        if (currentCursor+1<getEmailsCount(userID)){
+            setEmailCursor(userID, currentCursor+1);
+            isIncrement = true;
+        }
+        return isIncrement;
 
     }
-        public static int getEmailCursor(int userID){
-            int emailCursor = 0;
-            try{
-                final PreparedStatement preparedStatement = connection.prepareStatement("SELECT pointer FROM tb_rates_email_cursor WHERE userID = ?");
-                preparedStatement.setInt(1, userID);
-                final ResultSet resultSet = preparedStatement.executeQuery();
-                if (resultSet.next())
-                {
-                    emailCursor = resultSet.getInt(1);
-                }
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-            return emailCursor;
+    public static boolean decrementEmailCursor(int userID){
+        boolean isDecrement = false;
+        int currentCursor = getEmailCursor(userID);
+        if (currentCursor>0){
+            setEmailCursor(userID, currentCursor-1);
+            isDecrement = true;
         }
-        public static boolean setEmailCursor(int userID, int cursor){
-            int updatedRows = 0;
-            int cursorSet = Math.max(cursor, 0);
-            cursorSet = Math.min(cursorSet, getEmailsCount(userID));
+        return isDecrement;
+    }
 
-            try {
-                PreparedStatement preparedStatement = connection.prepareStatement("DELETE FROM tb_rates_email_cursor WHERE userID = ?");
-                preparedStatement.setInt(1, userID);
-                preparedStatement.executeUpdate();
 
-                preparedStatement = connection.prepareStatement("INSERT INTO tb_rates_email_cursor VALUES (?, ?)");
-                preparedStatement.setInt(1, userID);
-                preparedStatement.setInt(2, cursorSet);
-                updatedRows = preparedStatement.executeUpdate();
-
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-            return updatedRows>0;
+    public static boolean addRatesResponce(int userID, Date rateDate){
+        int insertedRows = 0;
+        try {
+            final PreparedStatement preparedStatement = connection.prepareStatement("INSERT INTO tb_rates_responce VALUES (?, ?, ?)");
+            preparedStatement.setInt(1, userID);
+            preparedStatement.setTimestamp(2, new Timestamp(rateDate.getTime()));
+            preparedStatement.setTimestamp(3, new Timestamp(System.currentTimeMillis()));
+            insertedRows = preparedStatement.executeUpdate();
+        } catch (SQLException e) {
+            LoggerService.logError(LOGTAG, e);
         }
-        public static int getEmailsCount(int userID) {
-            int emailsCount = 0;
-            try {
-                final PreparedStatement preparedStatement = connection.prepareStatement("SELECT COUNT(email)FROM tb_rates_user_email WHERE userID = ?");
-                preparedStatement.setInt(1, userID);
-                final ResultSet resultSet = preparedStatement.executeQuery();
-                if (resultSet.next()){
-                    emailsCount = resultSet.getInt(1);
-                }
-            } catch (SQLException e) {
-                e.printStackTrace();
+        return insertedRows>0;
+    }
+    public static Date getLastRateDate (int userID){
+        Date lastRateDate = new Date(System.currentTimeMillis());
+        try{
+            final PreparedStatement preparedStatement = connection.prepareStatement("SELECT ratedate FROM tb_rates_response WHERE userid = ? ORDER BY insertdate DESC");
+            preparedStatement.setInt(1, userID);
+            final ResultSet resultSet = preparedStatement.executeQuery();
+            if (resultSet.next()){
+                lastRateDate = resultSet.getDate(1);
             }
-            return emailsCount;
+        } catch (SQLException e) {
+            LoggerService.logError(LOGTAG, e);
         }
-        public static boolean incrementCursor(int userID){
-            boolean answer = false;
-            int currentCursor = getEmailCursor(userID);
-            if ((currentCursor+1)<getEmailsCount(userID)){
-                currentCursor++;
-                answer = true;
-            }
-            setEmailCursor(userID, currentCursor);
-            return answer;
-        }
-        public static boolean decrementCursor(int userID){
-            boolean answer = false;
-            int currentCursor = getEmailCursor(userID);
-            if (currentCursor >0){
-                currentCursor--;
-                answer = true;
-            }
-            setEmailCursor(userID, currentCursor);
-            return answer;
-        }
-
-
-
-
-    // endregion
+        return lastRateDate;
+    }
 
 }

@@ -18,26 +18,20 @@ import org.telegram.telegrambots.exceptions.TelegramApiException;
 import services.LocalizationService;
 import services.LoggerService;
 
-import java.io.File;
 import java.io.IOException;
-import java.sql.Timestamp;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
 public class RatesModule extends TelegramLongPollingBot implements IModule {
-    private static final String LOGTAG = "RatesModule";
-    private static final int WIDTH_INLINE_BUTTON = 25;
-    private LinkedList<String> moduleCommands = new LinkedList<>();
 
-    public RatesModule(){
-        moduleCommands.add(getModuleCode()+"_RatesActual");
-        moduleCommands.add(getModuleCode()+"_RatesMonth");
-    }
+    private static SimpleDateFormat shortDate = new SimpleDateFormat("dd.MM.yyyy");
+    private final String LOGTAG = "RatesModule";
+
 
     @Override
     public String getModuleTitle(int userID) {
-        return LocalizationService.getString(getModuleCode()+"_title", userID);
+        return LocalizationService.getString(getModuleCode()+"_Title", userID);
     }
 
     @Override
@@ -47,480 +41,279 @@ public class RatesModule extends TelegramLongPollingBot implements IModule {
 
     @Override
     public void handle(Update update) throws Throwable {
-
         if (update.hasMessage()){
             handleMessage(update.getMessage());
         } else if (update.hasCallbackQuery()){
             handleCallbackQuery(update.getCallbackQuery());
-        } else {
-            LoggerService.logError(LOGTAG, new Throwable(LOGTAG + "can't reconize update type"));
         }
-
     }
 
+    @Override
     public void handleMessage(Message message) throws TelegramApiException, IOException {
         int userID = message.getFrom().getId();
         long chatID = message.getChatId();
+
         SendMessage sendMessage = new SendMessage()
                 .setChatId(chatID);
-        if (message.getText().equals(getModuleTitle(userID))){
-            sendMessage.setReplyMarkup(getModuleMenu(userID))
-                    .setText(LocalizationService.getString(getModuleCode()+"_Welcome", userID));
-            execute(sendMessage);
-            return;
-        } else if (message.getText().equals(LocalizationService.getString("1_RatesActual", userID))){
-            sendMessage.setText(RatesService.getRatesMessage(new Date(System.currentTimeMillis()), userID));
-            sendMessage.setReplyMarkup(getRatesMessageMenu(userID));
-            execute(sendMessage);
-            RatesDB.addRatesResponce(userID, new Timestamp(System.currentTimeMillis()));
-            return;
-        } else if (message.getText().equals(LocalizationService.getString("1_RatesMonth", userID))){
-            Calendar calendar = Calendar.getInstance();
-            calendar.set(Calendar.DAY_OF_MONTH, 1);
-            calendar.add(Calendar.DATE, -1);
-            sendMessage.setText(RatesService.getRatesMessage(new Date(calendar.getTimeInMillis()), userID));
-            sendMessage.setReplyMarkup(getRatesMessageMenu(userID));
-            execute(sendMessage);
-            RatesDB.addRatesResponce(userID, new Timestamp(calendar.getTimeInMillis()));
-            return;
-        } else if (message.getText().contains("@")&& message.getText().contains(".") ){
-            if (RatesDB.addUserEmail(userID, message.getText())){
-                sendMessage.setText(LocalizationService.getString("1_EmailAdded", userID));
-                execute(sendMessage);
-                sendMessage.setText(RatesService.getRatesMessage(RatesDB.getLastResponseDate(userID), userID))
-                        .setReplyMarkup(getRatesMessageMenu(userID));
-                execute(sendMessage);
-            }
-        } else {
-            String date = message.getText();
-            date.trim().replace(",", ".").replace(" ", "");
 
-            try {
-                Date rateDate = new SimpleDateFormat("dd.MM.yyyy").parse(date);
-                sendMessage.setText(RatesService.getRatesMessage(rateDate, userID));
-                sendMessage.setReplyMarkup(getRatesMessageMenu(userID));
-            } catch (ParseException e) {
-                sendMessage.setText(LocalizationService.getString("1_parseDateError", userID));
+        try {
+
+            // Check module entering
+            if (message.getText().equals(LocalizationService.getString(getModuleCode() + "_Title", message.getFrom().getId()))) {
+                sendMessage.setText(LocalizationService.getString(getModuleCode() + "_Welcome", userID))
+                        .setReplyMarkup(getModuleMenu(userID));
+                execute(sendMessage);
+            } else {
+                if (message.getText().equals(LocalizationService.getString(getModuleCode() + "_RatesActual", userID))) {
+
+                    // Actual Rates
+                    sendMessage.setText(RatesService.getRatesMessage(new Date(System.currentTimeMillis()), userID))
+                            .setReplyMarkup(getRatesMessageMenu(userID));
+                    execute(sendMessage);
+                } else if (message.getText().equals(LocalizationService.getString(getModuleCode() + "_RatesMonth", userID))) {
+
+                    // Month Rates
+                    Calendar calendar = Calendar.getInstance();
+                    calendar.set(Calendar.DAY_OF_MONTH, 1);
+                    calendar.add(Calendar.DAY_OF_MONTH, -1);
+                    sendMessage.setText(RatesService.getRatesMessage(new Date(calendar.getTimeInMillis()), userID))
+                            .setReplyMarkup(getRatesMessageMenu(userID));
+                    execute(sendMessage);
+                } else if (message.getText().contains("@") && message.getText().contains(".")) {
+
+                    // Add new email
+                    if (RatesDB.addUserEmail(userID, message.getText())) {
+                        sendMessage.setText(LocalizationService.getString("1_EmailAdded", userID) + " " + message.getText());
+                        execute(sendMessage);
+                        RatesDB.setEmailCursor(userID, 0);
+                        sendMessage.setText(RatesService.getRatesMessage(RatesDB.getLastRateDate(userID), userID))
+                                .setReplyMarkup(getRatesMessageMenu(userID));
+                        execute(sendMessage);
+                    }
+                    return;
+                } else {
+
+                    // Trying parse date
+                    sendMessage.setText(RatesService.getRatesMessage(shortDate
+                            .parse(message.getText()
+                                    .replace(",", ".")
+                                    .trim()
+                                    .replace(" ", "")), userID))
+                                    .setReplyMarkup(getRatesMessageMenu(userID));
+                    execute(sendMessage);
+                }
             }
+
+        } catch (RatesException e) {
+            LoggerService.logError(LOGTAG, e);
+            sendMessage.setText(e.getMessage());
+            execute(sendMessage);
+        } catch (ParseException e) {
+            LoggerService.logError(LOGTAG, new Throwable(LocalizationService.getString("1_RatesParseException", userID)
+                    + " \"" + message.getText() + "\""));
+            sendMessage.setText(LocalizationService.getString("1_RatesParseException", userID)
+                    + " \"" + message.getText() + "\"" );
             execute(sendMessage);
         }
+
     }
-    public void handleCallbackQuery(CallbackQuery callbackQuery) throws TelegramApiException {
+    @Override
+    public void handleCallbackQuery(CallbackQuery callbackQuery) throws Throwable {
         int userID = callbackQuery.getFrom().getId();
         long chatID = callbackQuery.getMessage().getChatId();
-        long messageID = callbackQuery.getMessage().getMessageId();
         String callbackData = callbackQuery.getData();
+
         SendMessage sendMessage = new SendMessage()
                 .setChatId(chatID);
-        if (AccountManager.setLastCallbackMessageID(userID, messageID)){
-            switch (callbackData){
-                case "previousEmail":{
-                    if (RatesDB.incrementCursor(userID)){
-                        EditMessageText editMessageText = new EditMessageText()
-                                .setMessageId(callbackQuery.getMessage().getMessageId())
-                                .setText(callbackQuery.getMessage().getText())
-                                .setChatId(callbackQuery.getMessage().getChatId())
-                                .setReplyMarkup(getSettingsMenu(userID));
-                        execute(editMessageText);
 
+        EditMessageText editMessageText = new EditMessageText()
+                .setChatId(chatID)
+                .setMessageId(callbackQuery.getMessage().getMessageId())
+                .setText(callbackQuery.getMessage().getText());
+
+
+        switch (callbackData){
+            case "sendToNewEmail":{
+                sendMessage.setText(LocalizationService.getString("1_NewEmail", userID));
+                execute(sendMessage);
+                return;
+            }
+            case "sendToCurrentEmail":{
+                RatesService.sendFile(getRateDateFromCallbackMessage(callbackQuery), RatesDB.getCurrentUserEmail(userID));
+                sendMessage.setText(LocalizationService.getString("1_Sent", userID));
+                execute(sendMessage);
+                reloadLastRatesMessage(callbackQuery);
+                return;
+            }
+            case "downloadXls":{
+                SendDocument sendDocument = new SendDocument()
+                        .setNewDocument(RatesService.getRatesXlsFile(getRateDateFromCallbackMessage(callbackQuery)))
+                        .setChatId(chatID);
+                sendDocument(sendDocument);
+                return;
+            }
+            case "settings":{
+                editMessageText.setReplyMarkup(getRatesMessageSettingsMenu(userID));
+                execute(editMessageText);
+                return;
+
+            }
+
+            case "ratesMenu":{
+                editMessageText.setReplyMarkup(getRatesMessageMenu(userID));
+                execute(editMessageText);
+                return;
+            }
+
+            case "previousEmail":{
+                if (RatesDB.incrementEmailCursor(userID)){
+                    reloadLastRatesMessageSettings(callbackQuery);
+                }
+                return;
+            }
+            case "nextEmail":{
+                if (RatesDB.decrementEmailCursor(userID)){
+                    reloadLastRatesMessageSettings(callbackQuery);
+                }
+                return;
+            }
+            case "removeCurrentEmail": {
+                if (RatesDB.removeUserEmail(userID, RatesDB.getCurrentUserEmail(userID))) {
+                    reloadLastRatesMessageSettings(callbackQuery);
+                }
+                return;
+            }
+            case "addCCYmenu":{
+                reloadLastRatesMessageAddCCY(callbackQuery);
+                return;
+            }
+            case "removeCCYmenu":{
+                reloadLastRatesMessageRemoveCCY(callbackQuery);
+                return;
+            }
+            default:{
+                if (callbackData.contains("+CCY")){
+                    if (RatesDB.addUserCurrency(userID, callbackData.replace("+CCY", ""))){
+                        reloadLastRatesMessageAddCCY(callbackQuery);
                     }
-                    break;
-                }
-                case "nextEmail":{
-                    if (RatesDB.decrementCursor(userID)){
-                        EditMessageText editMessageText = new EditMessageText()
-                                .setMessageId(callbackQuery.getMessage().getMessageId())
-                                .setText(callbackQuery.getMessage().getText())
-                                .setChatId(callbackQuery.getMessage().getChatId())
-                                .setReplyMarkup(getSettingsMenu(userID));
-                        execute(editMessageText);
-
+                } else if (callbackData.contains("-CCY")){
+                    if (RatesDB.removeUserCurrency(userID, callbackData.replace("-CCY", ""))){
+                        reloadLastRatesMessageRemoveCCY(callbackQuery);
                     }
-                    break;
                 }
 
-                case "removeCurrentEmail":{
-
-                    if (RatesDB.removeUserEmail(userID)){
-                        EditMessageText editMessageText = new EditMessageText()
-                                .setMessageId(callbackQuery.getMessage().getMessageId())
-                                .setText(callbackQuery.getMessage().getText())
-                                .setChatId(callbackQuery.getMessage().getChatId())
-                                .setReplyMarkup(getSettingsMenu(userID));
-                        execute(editMessageText);
-                    }
-
-                    break;
-                }
-
-                case  "sendToNewEmail": {
-                    System.out.println("Send new emeal");
-
-                    //AccountManager.setLastCallbackMessageID(userID, callbackQuery.getMessage().getMessageId());
-                    sendMessage.setText(LocalizationService.getString("1_SendEmail", userID));
-                    execute(sendMessage);
-
-                    break;
-                }
-                case "backToSettings":
-                case "settings":{
-                    //AccountManager.setLastCallbackMessageID(userID, callbackQuery.getMessage().getMessageId());
-                    EditMessageText editMessageText = new EditMessageText()
-                            .setMessageId(callbackQuery.getMessage().getMessageId())
-                            .setText(callbackQuery.getMessage().getText())
-                            .setChatId(callbackQuery.getMessage().getChatId())
-                            .setReplyMarkup(getSettingsMenu(userID));
-                    execute(editMessageText);
-                    break;
-                }
-                case "backToMenu":{
-                    //AccountManager.setLastCallbackMessageID(userID, callbackQuery.getMessage().getMessageId());
-                    EditMessageText editMessageText = new EditMessageText()
-                            .setMessageId(callbackQuery.getMessage().getMessageId())
-                            .setText(callbackQuery.getMessage().getText())
-                            .setChatId(callbackQuery.getMessage().getChatId())
-                            .setReplyMarkup(getRatesMessageMenu(userID));
-                    execute(editMessageText);
-                    break;
-                }
-
-                case "addCCY":{
-                   // AccountManager.setLastCallbackMessageID(userID, callbackQuery.getMessage().getMessageId());
-                    EditMessageText editMessageText = new EditMessageText()
-                            .setMessageId(callbackQuery.getMessage().getMessageId())
-                            .setText(callbackQuery.getMessage().getText())
-                            .setChatId(callbackQuery.getMessage().getChatId())
-                            .setReplyMarkup(getRatesAddMenu(userID));
-                    execute(editMessageText);
-
-                    break;
-                }
-
-                case "removeCCY":{
-                    //AccountManager.setLastCallbackMessageID(userID, callbackQuery.getMessage().getMessageId());
-                    EditMessageText editMessageText = new EditMessageText()
-                            .setMessageId(callbackQuery.getMessage().getMessageId())
-                            .setText(callbackQuery.getMessage().getText())
-                            .setChatId(callbackQuery.getMessage().getChatId())
-                            .setReplyMarkup(getRatesRemoveMenu(userID));
-                    execute(editMessageText);
-
-                    break;
-                }
-                case "getXls":{
-                    SimpleDateFormat simpleDateFormat = new SimpleDateFormat("dd.MM.yyyy");
-                    String rateDateInMessage = callbackQuery.getMessage().getText();
-                    rateDateInMessage = rateDateInMessage
-                            .substring(0, rateDateInMessage.indexOf('\n'))
-                            .replace(LocalizationService.getString("1_RatesOn", userID), "")
-                            .replace(" ", "")
-                            .replace(" ", "");
-
-                    try {
-                        Date DateInMessage =  simpleDateFormat.parse(rateDateInMessage);
-                        File xls = RatesService.getXls(DateInMessage);
-                        SendDocument sendDocument = new SendDocument()
-                                .setChatId(chatID)
-                                .setNewDocument(xls);
-                        sendDocument(sendDocument);
-
-
-                    } catch (ParseException e) {
-                        e.printStackTrace();
-                    }
-
-                    break;
-                }
-                case "sendToCurrentEmail":{
-                    SimpleDateFormat simpleDateFormat = new SimpleDateFormat("dd.MM.yyyy");
-                    String rateDateInMessage = callbackQuery.getMessage().getText();
-                    rateDateInMessage = rateDateInMessage
-                            .substring(0, rateDateInMessage.indexOf('\n'))
-                            .replace(LocalizationService.getString("1_RatesOn", userID), "")
-                            .replace(" ", "")
-                            .replace(" ", "");
-
-                    try {
-                        Date DateInMessage =  simpleDateFormat.parse(rateDateInMessage);
-                        File xls = RatesService.getXls(DateInMessage);
-                        RatesService.sendFile(xls, RatesDB.getCurrentEmail(userID));
-
-
-                        EditMessageText editMessageText = new EditMessageText()
-                                .setMessageId(callbackQuery.getMessage().getMessageId())
-                                .setText(callbackQuery.getMessage().getText())
-                                .setChatId(callbackQuery.getMessage().getChatId())
-                                .setReplyMarkup(getRatesMessageMenu(userID));
-                        execute(editMessageText);
-
-                    } catch (ParseException e) {
-                        e.printStackTrace();
-                    }
-                    break;
-                }
-                default:{
-
-                    if (callbackData.contains("+CCY")){
-                        RatesDB.addUserCurrency(userID, callbackData.substring(4, 7));
-                        reloadRatesMessage(callbackQuery);
-                    } else if (callbackData.contains("-CCY")){
-                        RatesDB.removeUserCurrency(userID, callbackData.substring(4, 7));
-                        reloadRatesMessage(callbackQuery);
-                    }
-
-
-                }
             }
         }
-
     }
 
-
+    @Override
+    public boolean checkModuleEnering(String messageText, int userID) {
+        boolean moduleEntering = false;
+        if (messageText.equals(LocalizationService.getString(getModuleCode()+"_Title", userID))){
+            moduleEntering = true;
+        }
+        return moduleEntering;
+    }
 
     @Override
     public ReplyKeyboardMarkup getModuleMenu(int userID) {
         ReplyKeyboardMarkup replyKeyboardMarkup = new ReplyKeyboardMarkup();
         LinkedList<KeyboardRow> rows = new LinkedList<>();
-        for(String command : moduleCommands){
-            KeyboardRow row = new KeyboardRow();
-            row.add(LocalizationService.getString(command, userID));
-            rows.add(row);
-        }
-        KeyboardRow mainRow = new KeyboardRow();
-        mainRow.add(LocalizationService.getString("simpleCommandMainMenu", userID));
-        rows.add(mainRow);
-        replyKeyboardMarkup.setResizeKeyboard(true);
+
+        KeyboardRow rowActualRates = new KeyboardRow();
+        rowActualRates.add(LocalizationService.getString(getModuleCode()+"_RatesActual", userID));
+        rows.add(rowActualRates);
+
+        KeyboardRow rowMonthRates = new KeyboardRow();
+        rowMonthRates.add(LocalizationService.getString(getModuleCode()+"_RatesMonth", userID));
+        rows.add(rowMonthRates);
+
+        KeyboardRow rowMainMenuRow = new KeyboardRow();
+        rowMainMenuRow.add(LocalizationService.getString("SimpleCommandMainMenu", userID));
+        rows.add(rowMainMenuRow);
+
         replyKeyboardMarkup.setKeyboard(rows);
+        replyKeyboardMarkup.setResizeKeyboard(true);
+
         return replyKeyboardMarkup;
+
     }
-    public InlineKeyboardMarkup getRatesMessageMenu(int userID){
-
-        InlineKeyboardMarkup keyboardMarkup = new InlineKeyboardMarkup();
+    private InlineKeyboardMarkup getRatesMessageMenu(int userID){
+        InlineKeyboardMarkup inlineKeyboardMarkup = new InlineKeyboardMarkup();
         List<List<InlineKeyboardButton>> rows = new LinkedList<>();
-        int userEmailsCount = RatesDB.getEmailsCount(userID);
-
-        if(userEmailsCount == 0 ){
-            List<InlineKeyboardButton> sendToNewEmailRow = new LinkedList<>();
-            sendToNewEmailRow.add(new InlineKeyboardButton()
-                    .setText(LocalizationService.getString("1_SendTo", userID))
-                    .setCallbackData("sendToNewEmail"));
-            rows.add(sendToNewEmailRow);
-        } else if (userEmailsCount >0 ){
-            List<InlineKeyboardButton> sendToOneEmailRow = new LinkedList<>();
-            String userEmail = RatesDB.getCurrentEmail(userID);
-            if (userEmail.length()>WIDTH_INLINE_BUTTON){
-                userEmail = userEmail.substring(0,WIDTH_INLINE_BUTTON)+"...";
-            }
-            sendToOneEmailRow.add(new InlineKeyboardButton()
-                    .setText(userEmail)
-                    .setCallbackData("sendToCurrentEmail"));
-            rows.add(sendToOneEmailRow);
-
-        }
-
-
-        List<InlineKeyboardButton> secondRow = new LinkedList<>();
-        secondRow.add(new InlineKeyboardButton()
-                .setText(LocalizationService.getString("1_getXls", userID))
-                .setCallbackData("getXls"));
-
-        secondRow.add(new InlineKeyboardButton()
-                .setText(LocalizationService.getString("1_settings", userID))
-                .setCallbackData("settings"));
-
-        rows.add(secondRow);
-
-
-
-        keyboardMarkup.setKeyboard(rows);
-        return keyboardMarkup;
-
-
-      /*    //region First menu
-        InlineKeyboardMarkup keyboardMarkup = new InlineKeyboardMarkup();
-        List<List<InlineKeyboardButton>> rows = new LinkedList<>();
-
-        List<InlineKeyboardButton> firsRow = new LinkedList<>();
-        firsRow.add(new InlineKeyboardButton().setText(LocalizationService.getString("1_cahngeCCYList", userID)).setCallbackData("cahngeCCYList"));
-        rows.add(firsRow);
-
-        int userEmailsCount = RatesDB.getEmailsCount(userID);
-
-        if (userEmailsCount == 0){
-            List<InlineKeyboardButton> sendToNewEmailRow = new LinkedList<>();
-            sendToNewEmailRow.add(new InlineKeyboardButton()
-                    .setText(LocalizationService.getString("1_SendTo", userID))
-                    .setCallbackData("sendToNewEmail"));
-            rows.add(sendToNewEmailRow);
-        } else if (userEmailsCount == 1){
-            List<InlineKeyboardButton> sendToOneEmailRow = new LinkedList<>();
-            String userEmail = RatesDB.getCurrentEmail(userID);
-            if (userEmail.length()>WIDTH_INLINE_BUTTON){
-                userEmail = userEmail.substring(0,WIDTH_INLINE_BUTTON)+"...";
-            }
-            sendToOneEmailRow.add(new InlineKeyboardButton()
-                    .setText(userEmail)
-                    .setCallbackData("sendToCurrentEmail"));
-            rows.add(sendToOneEmailRow);
-
-            List<InlineKeyboardButton> selectEmailsRow = new LinkedList<>();
-            selectEmailsRow.add(new InlineKeyboardButton()
-                    .setText(LocalizationService.getString("1_removeCurrentEmail", userID))
-                    .setCallbackData("removeCurrentEmail"));
-            selectEmailsRow.add(new InlineKeyboardButton()
-                    .setText(LocalizationService.getString("1_addEmail", userID))
-                    .setCallbackData("sendToNewEmail"));
-            rows.add(selectEmailsRow);
-
-
-        } else if (userEmailsCount>1){
-            List<InlineKeyboardButton> variableEmailsRow = new LinkedList<>();
-            String userEmail = RatesDB.getCurrentEmail(userID);
-            if (userEmail.length()>WIDTH_INLINE_BUTTON){
-                userEmail = userEmail.substring(0, WIDTH_INLINE_BUTTON)+"...";
-            }
-            variableEmailsRow.add(new InlineKeyboardButton()
-                    .setText(userEmail)
-                    .setCallbackData("sendToCurrentEmail"));
-            rows.add(variableEmailsRow);
-
-            int nextGap = RatesDB.getEmailCursor(userID);
-            int previousGap = RatesDB.getEmailsCount(userID)- RatesDB.getEmailCursor(userID)-1;
-
-            List<InlineKeyboardButton> selectEmailsRow = new LinkedList<>();
-
-            selectEmailsRow.add(new InlineKeyboardButton()
-                    .setText(LocalizationService.getString("1_previousEmail", userID)
-                            + previousGap)
-                    .setCallbackData("previousEmail"));
-
-
-            selectEmailsRow.add(new InlineKeyboardButton()
-                    .setText(nextGap
-                            + LocalizationService.getString("1_nextEmail", userID))
-                    .setCallbackData("nextEmail"));
-
-            rows.add(selectEmailsRow);
-
-
-            selectEmailsRow.add(new InlineKeyboardButton()
-                    .setText(LocalizationService.getString("1_removeCurrentEmail", userID))
-                    .setCallbackData("removeCurrentEmail"));
-
-            selectEmailsRow.add(new InlineKeyboardButton()
-                    .setText(LocalizationService.getString("1_addEmail", userID))
-                    .setCallbackData("sendToNewEmail"));
-
-
-        }
-
-
-        List<InlineKeyboardButton> getXlsRow = new LinkedList<>();
-        getXlsRow.add(new InlineKeyboardButton()
-                .setText(LocalizationService.getString("1_getXls", userID))
-                .setCallbackData("getXls"));
-        rows.add(getXlsRow);
-
-
-
-        keyboardMarkup.setKeyboard(rows);
-        return keyboardMarkup;
-
-        //endregion  */
-    }
-    public InlineKeyboardMarkup getSettingsMenu(int userID){
-        InlineKeyboardMarkup keyboardMarkup = new InlineKeyboardMarkup();
-        List<List<InlineKeyboardButton>> rows = new LinkedList<>();
-
-        // Кнопки Добавить и удалить валюту
-        List<InlineKeyboardButton> firsRow = new LinkedList<>();
-        firsRow.add(new InlineKeyboardButton().setText(LocalizationService.getString("1_addCCY", userID)).setCallbackData("addCCY"));
-        firsRow.add(new InlineKeyboardButton().setText(LocalizationService.getString("1_removeCCY", userID)).setCallbackData("removeCCY"));
-        rows.add(firsRow);
-
 
         int userEmailCount = RatesDB.getEmailsCount(userID);
 
-        if (userEmailCount > 1){
-            List<InlineKeyboardButton> variableEmailsRow = new LinkedList<>();
-            String userEmail = RatesDB.getCurrentEmail(userID);
-            if (userEmail.length()>WIDTH_INLINE_BUTTON){
-                userEmail = userEmail.substring(0, WIDTH_INLINE_BUTTON)+"...";
+        // email row
+        if (userEmailCount == 0){
+            List<InlineKeyboardButton> emailRow = new LinkedList<>();
+            emailRow.add(new InlineKeyboardButton().setText(LocalizationService.getString("1_SendTo", userID)).setCallbackData("sendToNewEmail"));
+            rows.add(emailRow);
+        } else {
+            List<InlineKeyboardButton> emailRow = new LinkedList<>();
+            emailRow.add(new InlineKeyboardButton().setText(RatesDB.getCurrentUserEmail(userID)).setCallbackData("sendToCurrentEmail"));
+            rows.add(emailRow);
         }
-            variableEmailsRow.add(new InlineKeyboardButton()
-                    .setText(userEmail)
-                    .setCallbackData("sendToCurrentEmail"));
-            rows.add(variableEmailsRow);
 
-            int nextGap = RatesDB.getEmailCursor(userID);
-            int previousGap = RatesDB.getEmailsCount(userID)- RatesDB.getEmailCursor(userID)-1;
+        // Settings and Download row
+        List<InlineKeyboardButton> secondRow = new LinkedList<>();
+        secondRow.add(new InlineKeyboardButton().setText(LocalizationService.getString("1_DownloadXLS", userID)).setCallbackData("downloadXls"));
+        secondRow.add(new InlineKeyboardButton().setText(LocalizationService.getString("1_Settings", userID)).setCallbackData("settings"));
+        rows.add(secondRow);
 
-            List<InlineKeyboardButton> selectEmailsRow = new LinkedList<>();
+        inlineKeyboardMarkup.setKeyboard(rows);
+        return inlineKeyboardMarkup;
+    }
+    private InlineKeyboardMarkup getRatesMessageSettingsMenu(int userID){
+        InlineKeyboardMarkup inlineKeyboardMarkup = new InlineKeyboardMarkup();
+        List<List<InlineKeyboardButton>> rows = new LinkedList<>();
 
-            selectEmailsRow.add(new InlineKeyboardButton()
-                    .setText(LocalizationService.getString("1_previousEmail", userID)
-                            + previousGap)
-                    .setCallbackData("previousEmail"));
+        // Add and Remove CCY row
+        List<InlineKeyboardButton> ccyChangeRow = new LinkedList<>();
+        ccyChangeRow.add(new InlineKeyboardButton().setText(LocalizationService.getString("1_RemoveCCY", userID)).setCallbackData("removeCCYmenu"));
+        ccyChangeRow.add(new InlineKeyboardButton().setText(LocalizationService.getString("1_AddCCY", userID)).setCallbackData("addCCYmenu"));
+        rows.add(ccyChangeRow);
 
+        int userEmailsCount = RatesDB.getEmailsCount(userID);
+        int currentEmailCursor = RatesDB.getEmailCursor(userID);
 
-            selectEmailsRow.add(new InlineKeyboardButton()
-                    .setText(nextGap
-                            + LocalizationService.getString("1_nextEmail", userID))
-                    .setCallbackData("nextEmail"));
+        // Current email row
+        List<InlineKeyboardButton> currentEmailRow = new LinkedList<>();
+        if (userEmailsCount == 0){
+            currentEmailRow.add(new InlineKeyboardButton().setText(LocalizationService.getString("1_SendTo", userID)).setCallbackData("sendToNewEmail"));
+        } else {
+            currentEmailRow.add(new InlineKeyboardButton().setText(RatesDB.getCurrentUserEmail(userID)).setCallbackData("sendToCurrentEmail"));
+        }
+        rows.add(currentEmailRow);
 
-            rows.add(selectEmailsRow);
-
-
-            selectEmailsRow.add(new InlineKeyboardButton()
-                    .setText(LocalizationService.getString("1_removeCurrentEmail", userID))
-                    .setCallbackData("removeCurrentEmail"));
-
-            selectEmailsRow.add(new InlineKeyboardButton()
-                    .setText(LocalizationService.getString("1_addEmail", userID))
-                    .setCallbackData("sendToNewEmail"));
-        } else if (userEmailCount == 1){
-            List<InlineKeyboardButton> sendToOneEmailRow = new LinkedList<>();
-            String userEmail = RatesDB.getCurrentEmail(userID);
-            if (userEmail.length()>WIDTH_INLINE_BUTTON){
-                userEmail = userEmail.substring(0,WIDTH_INLINE_BUTTON)+"...";
+        // Manage email buttons menu
+        if (userEmailsCount > 0){
+            List<InlineKeyboardButton> manageEmails = new LinkedList<>();
+            if (userEmailsCount == 1){
+                // without forward\back buttons
+                manageEmails.add(new InlineKeyboardButton().setText(LocalizationService.getString("1_RemoveCurrentEmail", userID)).setCallbackData("removeCurrentEmail"));
+                manageEmails.add(new InlineKeyboardButton().setText(LocalizationService.getString("1_AddNewEmail", userID)).setCallbackData("sendToNewEmail"));
+            } else {
+                int gapEmailsBack = userEmailsCount - currentEmailCursor - 1;
+                int gapEmailsForward = currentEmailCursor;
+                manageEmails.add(new InlineKeyboardButton().setText(LocalizationService.getString("1_PreviousEmail", userID) + gapEmailsBack).setCallbackData("previousEmail"));
+                manageEmails.add(new InlineKeyboardButton().setText(gapEmailsForward + LocalizationService.getString("1_NextEmail", userID)).setCallbackData("nextEmail"));
+                manageEmails.add(new InlineKeyboardButton().setText(LocalizationService.getString("1_AddNewEmail", userID)).setCallbackData("sendToNewEmail"));
+                manageEmails.add(new InlineKeyboardButton().setText(LocalizationService.getString("1_RemoveCurrentEmail", userID)).setCallbackData("removeCurrentEmail"));
             }
-            sendToOneEmailRow.add(new InlineKeyboardButton()
-                    .setText(userEmail)
-                    .setCallbackData("sendToCurrentEmail"));
-            rows.add(sendToOneEmailRow);
-
-            List<InlineKeyboardButton> selectEmailsRow = new LinkedList<>();
-            selectEmailsRow.add(new InlineKeyboardButton()
-                    .setText(LocalizationService.getString("1_removeCurrentEmail", userID))
-                    .setCallbackData("removeCurrentEmail"));
-            selectEmailsRow.add(new InlineKeyboardButton()
-                    .setText(LocalizationService.getString("1_addEmail", userID))
-                    .setCallbackData("sendToNewEmail"));
-            rows.add(selectEmailsRow);
-        }  else {
-            List<InlineKeyboardButton> sendToNewEmailRow = new LinkedList<>();
-            sendToNewEmailRow.add(new InlineKeyboardButton()
-                    .setText(LocalizationService.getString("1_addEmail", userID))
-                    .setCallbackData("sendToNewEmail"));
-            rows.add(sendToNewEmailRow);
+            rows.add(manageEmails);
         }
 
-
-
-
-        // Кнопка назад
+        // BackRow
         List<InlineKeyboardButton> backRow = new LinkedList<>();
-        backRow.add(new InlineKeyboardButton()
-                .setText(LocalizationService.getString("1_back", userID))
-                .setCallbackData("backToMenu"));
+        backRow.add(new InlineKeyboardButton().setText(LocalizationService.getString("1_BackToMenu", userID)).setCallbackData("ratesMenu"));
         rows.add(backRow);
 
-
-        keyboardMarkup.setKeyboard(rows);
-        return keyboardMarkup;
+        inlineKeyboardMarkup.setKeyboard(rows);
+        return  inlineKeyboardMarkup;
     }
 
-    public InlineKeyboardMarkup getRatesAddMenu(int userID){
+    private InlineKeyboardMarkup getAddCCYMenu(int userID){
         InlineKeyboardMarkup inlineKeyboardMarkup = new InlineKeyboardMarkup();
 
         ArrayList<String> userCurrencies = RatesDB.getUserCurrencies(userID);
@@ -546,7 +339,7 @@ public class RatesModule extends TelegramLongPollingBot implements IModule {
 
             for (int j = 0; j < columns; j++) {
                 if (counter>=newCurrencies.size()) {
-                    row.add(new InlineKeyboardButton().setText(LocalizationService.getString("1_back", userID)).setCallbackData("backToSettings"));
+                    row.add(new InlineKeyboardButton().setText(LocalizationService.getString("1_BackToMenu", userID)).setCallbackData("settings"));
                     break;
                 }
                 row.add(new InlineKeyboardButton()
@@ -562,7 +355,7 @@ public class RatesModule extends TelegramLongPollingBot implements IModule {
         inlineKeyboardMarkup.setKeyboard(rows);
         return inlineKeyboardMarkup;
     }
-    public InlineKeyboardMarkup getRatesRemoveMenu(int userID){
+    private InlineKeyboardMarkup getRemoveCCYMenu(int userID){
         InlineKeyboardMarkup inlineKeyboardMarkup = new InlineKeyboardMarkup();
 
         ArrayList<String> userCurrencies = RatesDB.getUserCurrencies(userID);
@@ -577,7 +370,7 @@ public class RatesModule extends TelegramLongPollingBot implements IModule {
 
             for (int j = 0; j < columns; j++) {
                 if (counter>=userCurrencies.size()) {
-                    row.add(new InlineKeyboardButton().setText(LocalizationService.getString("1_back", userID)).setCallbackData("backToSettings"));
+                    row.add(new InlineKeyboardButton().setText(LocalizationService.getString("1_BackToMenu", userID)).setCallbackData("settings"));
                     break;
                 }
                 row.add(new InlineKeyboardButton()
@@ -594,38 +387,137 @@ public class RatesModule extends TelegramLongPollingBot implements IModule {
         return inlineKeyboardMarkup;
     }
 
-
-    private  void reloadRatesMessage(CallbackQuery callbackQuery){
+    private void reloadLastRatesMessage(CallbackQuery callbackQuery){
+        long chatID = callbackQuery.getMessage().getChatId();
         int userID = callbackQuery.getFrom().getId();
-        SimpleDateFormat simpleDateFormat = new SimpleDateFormat("dd.MM.yyyy");
-        String rateDateInMessage = callbackQuery.getMessage().getText();
-        rateDateInMessage = rateDateInMessage
-                .substring(0, rateDateInMessage.indexOf('\n'))
+        try {
+        String date = callbackQuery.getMessage().getText()
+                .substring(0, callbackQuery.getMessage().getText().indexOf("\n"))
+                .trim()
                 .replace(LocalizationService.getString("1_RatesOn", userID), "")
-                .replace(" ", "")
                 .replace(" ", "");
+            Date rateDateInMessage = shortDate.parse(date);
 
+        EditMessageText editMessageText = new EditMessageText()
+                .setChatId(chatID)
+                .setMessageId((int) AccountManager.getLastCallbackMessageID(userID))
+                .setText(RatesService.getRatesMessage(rateDateInMessage, userID))
+                .setReplyMarkup(getRatesMessageMenu(userID));
 
-        EditMessageText editMessageText = null;
-        try {
-            editMessageText = new EditMessageText()
-                    .setMessageId(callbackQuery.getMessage().getMessageId())
-                    .setText(RatesService.getRatesMessage(simpleDateFormat.parse(rateDateInMessage), userID))
-                    .setChatId(callbackQuery.getMessage().getChatId())
-                    .setReplyMarkup(getRatesMessageMenu(userID));
-        } catch (IOException e) {
-            e.printStackTrace();
+        execute(editMessageText);
+
         } catch (ParseException e) {
-            e.printStackTrace();
-        }
-        try {
-            execute(editMessageText);
+            LoggerService.logError(LOGTAG, e);
+        } catch (RatesException e) {
+            LoggerService.logError(LOGTAG, e);
         } catch (TelegramApiException e) {
-            e.printStackTrace();
+            LoggerService.logError(LOGTAG, e);
+        }
+    }
+    private void reloadLastRatesMessageSettings(CallbackQuery callbackQuery){
+        long chatID = callbackQuery.getMessage().getChatId();
+        int userID = callbackQuery.getFrom().getId();
+        try {
+        String date = callbackQuery.getMessage().getText()
+                .substring(0, callbackQuery.getMessage().getText().indexOf("\n"))
+                .trim()
+                .replace(LocalizationService.getString("1_RatesOn", userID), "")
+                .replace(" ", "");
+            Date rateDateInMessage = shortDate.parse(date);
+
+        EditMessageText editMessageText = new EditMessageText()
+                .setChatId(chatID)
+                .setMessageId((int) AccountManager.getLastCallbackMessageID(userID))
+                .setText(RatesService.getRatesMessage(rateDateInMessage, userID))
+                .setReplyMarkup(getRatesMessageSettingsMenu(userID));
+
+
+        execute(editMessageText);
+
+        } catch (ParseException e) {
+            LoggerService.logError(LOGTAG, e);
+        } catch (RatesException e) {
+            LoggerService.logError(LOGTAG, e);
+        } catch (TelegramApiException e) {
+            LoggerService.logError(LOGTAG, e);
+        }
+    }
+    private void reloadLastRatesMessageAddCCY(CallbackQuery callbackQuery){
+        long chatID = callbackQuery.getMessage().getChatId();
+        int userID = callbackQuery.getFrom().getId();
+        try {
+        String date = callbackQuery.getMessage().getText()
+                .substring(0, callbackQuery.getMessage().getText().indexOf("\n"))
+                .trim()
+                .replace(LocalizationService.getString("1_RatesOn", userID), "")
+                .replace(" ", "");
+            Date rateDateInMessage = shortDate.parse(date);
+
+        EditMessageText editMessageText = new EditMessageText()
+                .setChatId(chatID)
+                .setMessageId((int) AccountManager.getLastCallbackMessageID(userID))
+                .setText(RatesService.getRatesMessage(rateDateInMessage, userID))
+                .setReplyMarkup(getAddCCYMenu(userID));
+
+
+        execute(editMessageText);
+
+        } catch (ParseException e) {
+            LoggerService.logError(LOGTAG, e);
+        } catch (RatesException e) {
+            LoggerService.logError(LOGTAG, e);
+        } catch (TelegramApiException e) {
+            LoggerService.logError(LOGTAG, e);
+        }
+    }
+    private void reloadLastRatesMessageRemoveCCY(CallbackQuery callbackQuery){
+        long chatID = callbackQuery.getMessage().getChatId();
+        int userID = callbackQuery.getFrom().getId();
+        try {
+        String date = callbackQuery.getMessage().getText()
+                .substring(0, callbackQuery.getMessage().getText().indexOf("\n"))
+                .trim()
+                .replace(LocalizationService.getString("1_RatesOn", userID), "")
+                .replace(" ", "");
+            Date rateDateInMessage = shortDate.parse(date);
+
+        EditMessageText editMessageText = new EditMessageText()
+                .setChatId(chatID)
+                .setMessageId((int) AccountManager.getLastCallbackMessageID(userID))
+                .setText(RatesService.getRatesMessage(rateDateInMessage, userID))
+                .setReplyMarkup(getRemoveCCYMenu(userID));
+
+
+        execute(editMessageText);
+
+        } catch (ParseException e) {
+            LoggerService.logError(LOGTAG, e);
+        } catch (RatesException e) {
+            LoggerService.logError(LOGTAG, e);
+        } catch (TelegramApiException e) {
+            LoggerService.logError(LOGTAG, e);
         }
     }
 
+    private Date getRateDateFromCallbackMessage(CallbackQuery callbackQuery) {
+        long chatID = callbackQuery.getMessage().getChatId();
+        int userID = callbackQuery.getFrom().getId();
+        Date rateDateInMessage = new Date(System.currentTimeMillis());
+        try {
+            String date = callbackQuery.getMessage().getText()
+                    .substring(0, callbackQuery.getMessage().getText().indexOf("\n"))
+                    .trim()
+                    .replace(LocalizationService.getString("1_RatesOn", userID), "")
+                    .replace(" ", "");
+            rateDateInMessage = shortDate.parse(date);
+        } catch (ParseException e) {
+            e.printStackTrace();
+        }
+        return rateDateInMessage;
+    }
 
+
+        // region Override Bot Methods
 
     @Override
     public void onUpdateReceived(Update update) {
@@ -641,4 +533,6 @@ public class RatesModule extends TelegramLongPollingBot implements IModule {
     public String getBotToken() {
         return BotConfigs.getBotToken();
     }
+
+    //endregion
 }

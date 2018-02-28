@@ -2,8 +2,6 @@ package modules;
 
 import configs.BotConfigs;
 import database.AccountManager;
-import modules.accounts.AccountsModule;
-import modules.bankrupts.BankruptsModule;
 import modules.language.LanguageModule;
 import modules.rates.RatesModule;
 import org.telegram.telegrambots.api.methods.send.SendDocument;
@@ -32,10 +30,9 @@ public class ModuleHandler extends TelegramLongPollingBot {
     static {
         // region Modules creating
         modulesList.add(new RatesModule());
-        modulesList.add(new BankruptsModule());
-        modulesList.add(new AccountsModule());
         modulesList.add(new LanguageModule());
         // endregion
+
         // region Simple Commands creating
         simpleCommands.add("/start");
         simpleCommands.add("/stop");
@@ -47,7 +44,12 @@ public class ModuleHandler extends TelegramLongPollingBot {
         int userID = 0;
         long chatID = 0;
         String messageText = "";
+        String callbackData = "";
         int userState = 0;
+
+
+
+
 
         if (update.hasMessage()) {
             userID = update.getMessage().getFrom().getId();
@@ -57,11 +59,23 @@ public class ModuleHandler extends TelegramLongPollingBot {
         else if (update.hasCallbackQuery()){
             userID = update.getCallbackQuery().getFrom().getId();
             chatID = update.getCallbackQuery().getMessage().getChatId();
-            AccountManager.setLastCallbackMessageID(userID, update.getCallbackQuery().getMessage().getMessageId());
+            callbackData = update.getCallbackQuery().getData();
         }
 
 
-
+        // region Easter Eggs
+        if (update.hasMessage() && update.getMessage().getText().toLowerCase().equals("брухля")){
+            ClassLoader classLoader = ModuleHandler.class.getClassLoader();
+            SendDocument sendDocument = new SendDocument()
+                    .setChatId(chatID)
+                    .setNewDocument( new File(classLoader.getResource("up4kman.gif").getFile()) );
+            try {
+                new ModuleHandler().sendDocument(sendDocument);
+            } catch (TelegramApiException e) {
+                e.printStackTrace();
+            }
+        }
+        // endregion
 
         // Checking on Simple Command
         if (messageText.length()>0 && simpleCommands.contains(messageText)){
@@ -90,7 +104,6 @@ public class ModuleHandler extends TelegramLongPollingBot {
             if (userState == module.getModuleCode()){
                 try{
                     module.handle(update);
-                    return;
                 }
                 catch (Throwable e){
                     // Catching errors from module
@@ -98,12 +111,11 @@ public class ModuleHandler extends TelegramLongPollingBot {
                     sendMainMenu(userID, chatID);
                 }
                 findModule = true;
-                LoggerService.logInfo(LOGTAG, AccountManager.getUserName(userID)
-                        + "Find module = " + module.getModuleTitle(userID));
+                LoggerService.logInfo(LOGTAG, "Find module - " + module.getModuleTitle(userID));
             }
         }
         if (!findModule){
-            LoggerService.logError(LOGTAG, new Throwable( AccountManager.getUserName(userID) + "Cant find module!"));
+            LoggerService.logInfo(LOGTAG, "Cant find module");
             sendMainMenu(userID, chatID);
         }
 
@@ -113,9 +125,7 @@ public class ModuleHandler extends TelegramLongPollingBot {
 
     // region Main menu handler
     public static boolean isMainMenuCall(String message, int userID){
-        if (message.equals(LocalizationService.getString("SimpleCommandMainMenu", userID))){
-            LoggerService.logInfo(LOGTAG, AccountManager.getUserName(userID)
-                    + "Main menu call detected");
+        if (message.equals(LocalizationService.getString("simpleCommandMainMenu", userID))){
             return true;
         } else {
             return false;
@@ -125,7 +135,7 @@ public class ModuleHandler extends TelegramLongPollingBot {
         if (AccountManager.setUserState(userID, 0)) {
             SendMessage sendMessage = new SendMessage()
                     .setChatId(chatID)
-                    .setText(LocalizationService.getString("SimpleCommandStart", userID));
+                    .setText(LocalizationService.getString("simpleCommandStart", userID));
 
             ReplyKeyboardMarkup replyKeyboardMarkup = new ReplyKeyboardMarkup();
             LinkedList<KeyboardRow> rows = new LinkedList<>();
@@ -139,7 +149,7 @@ public class ModuleHandler extends TelegramLongPollingBot {
             replyKeyboardMarkup.setResizeKeyboard(true);
             sendMessage.setReplyMarkup(replyKeyboardMarkup);
             try {
-                LoggerService.logInfo(LOGTAG, AccountManager.getUserName(userID) + "Sending main menu");
+                LoggerService.logInfo(LOGTAG, "Sending main menu");
                 new ModuleHandler().execute(sendMessage);
             } catch (TelegramApiException e) {
                 LoggerService.logError(LOGTAG, e);
@@ -156,27 +166,21 @@ public class ModuleHandler extends TelegramLongPollingBot {
 
         switch (message.toLowerCase()){
             case "/start":{
-                LoggerService.logInfo(LOGTAG, AccountManager.getUserName(userID)
-                        + "handle simple command /start");
                 sendMainMenu(userID, chatID);
                 return;
             }
             case "/stop":{
-                LoggerService.logInfo(LOGTAG, AccountManager.getUserName(userID)
-                        + "handle simple command /stop");
-                sendMessage.setText(LocalizationService.getString("SimpleCommandStop", userID));
+                sendMessage.setText(LocalizationService.getString("simpleCommandStop", userID));
                 sendMessage.setReplyMarkup(new ReplyKeyboardRemove());
                 AccountManager.setUserState(userID, 0);
                 break;
             }
             case "/help":{
-                LoggerService.logInfo(LOGTAG, AccountManager.getUserName(userID)
-                        + "handle simple command /help");
-                sendMessage.setText(LocalizationService.getString("SimpleCommandHelp", userID));
+                sendMessage.setText(LocalizationService.getString("simpleCommandHelp", userID));
                 ReplyKeyboardMarkup replyKeyboardMarkup = new ReplyKeyboardMarkup();
                 LinkedList<KeyboardRow> rows = new LinkedList<>();
                 KeyboardRow row = new KeyboardRow();
-                row.add(LocalizationService.getString("SimpleCommandMainMenu", userID));
+                row.add(LocalizationService.getString("simpleCommandMainMenu", userID));
                 rows.add(row);
                 replyKeyboardMarkup.setKeyboard(rows);
                 replyKeyboardMarkup.setResizeKeyboard(true);
@@ -196,7 +200,7 @@ public class ModuleHandler extends TelegramLongPollingBot {
     // region Cheking module title
     private static void checkModuleEntering(String message, int userID){
         for (IModule module : modulesList){
-            if (message.equals(LocalizationService.getString(module.getModuleCode()+"_Title", userID))){
+            if (message.equals(LocalizationService.getString(module.getModuleCode()+"_title", userID))){
               if (AccountManager.setUserState(userID, module.getModuleCode())){
                     return;
               }
