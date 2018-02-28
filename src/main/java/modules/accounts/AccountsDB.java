@@ -78,6 +78,7 @@ public class AccountsDB {
                 throw new AccountsException(LocalizationService.getString("2_AccountNotExist", userID));
             }
         } catch (SQLException e) {
+            e.printStackTrace();
             LoggerService.logError(LOGTAG, e);
             throw new AccountsException(LocalizationService.getString("2_AccountNotExist", userID));
         }
