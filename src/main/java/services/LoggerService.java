@@ -17,7 +17,7 @@ public class LoggerService {
     // 3 - Errors
     // 4 - Only print stacktrace
 
-    private static final int logLevel = 1 ;
+    private static final int logLevel = 4 ;
 
     public static void logError(String logtag, Throwable throwable){
         //BotLogger.error(logtag, throwable.getMessage());
