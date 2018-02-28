@@ -70,7 +70,7 @@ public class AccountsDB {
     public static int findIndex(String request, int userID) throws AccountsException {
         int index = 0;
         try {
-            final PreparedStatement preparedStatement = connection.prepareStatement("select pointer from tb_accounts_index WHERE \"group\" LIKE '"+request+"%'");
+            final PreparedStatement preparedStatement = connection.prepareStatement("select pointer from tb_accounts_index WHERE accGroup LIKE '"+request+"%'");
             final ResultSet resultSet = preparedStatement.executeQuery();
             if (resultSet.next()){
                 index = resultSet.getInt(1);
