@@ -85,7 +85,7 @@ public class AccountsModule extends TelegramLongPollingBot implements IModule {
     }
 
     @Override
-    public void handleCallbackQuery(CallbackQuery callbackQuery) throws Throwable {
+    public  void handleCallbackQuery(CallbackQuery callbackQuery) throws Throwable {
         int userID = callbackQuery.getFrom().getId();
         long chatID = callbackQuery.getMessage().getChatId();
         String callbackData = callbackQuery.getData();

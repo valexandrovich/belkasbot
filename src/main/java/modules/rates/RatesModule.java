@@ -136,13 +136,14 @@ public class RatesModule extends TelegramLongPollingBot implements IModule {
             case "sendToNewEmail":{
                 sendMessage.setText(LocalizationService.getString("1_NewEmail", userID));
                 execute(sendMessage);
+                LoggerService.logAction(LOGTAG, "Sendig csv file to " + RatesDB.getCurrentUserEmail(userID));
                 return;
             }
             case "sendToCurrentEmail":{
                 RatesService.sendFile(getRateDateFromCallbackMessage(callbackQuery), RatesDB.getCurrentUserEmail(userID));
                 sendMessage.setText(LocalizationService.getString("1_Sent", userID));
                 execute(sendMessage);
-                reloadLastRatesMessage(callbackQuery);
+                //reloadLastRatesMessage(callbackQuery);
                 return;
             }
             case "downloadXls":{
@@ -150,6 +151,7 @@ public class RatesModule extends TelegramLongPollingBot implements IModule {
                         .setNewDocument(RatesService.getRatesXlsFile(getRateDateFromCallbackMessage(callbackQuery)))
                         .setChatId(chatID);
                 sendDocument(sendDocument);
+
                 return;
             }
             case "settings":{

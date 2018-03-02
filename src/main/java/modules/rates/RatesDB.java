@@ -169,6 +169,7 @@ public class RatesDB {
             preparedStatement.setInt(1, userID);
             preparedStatement.setString(2, email);
             deletedRows = preparedStatement.executeUpdate();
+            decrementEmailCursor(userID);
         } catch (SQLException e) {
             e.printStackTrace();
         }

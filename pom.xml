@@ -124,6 +124,13 @@
             <version>9.1-901-1.jdbc4</version>
         </dependency>
 
+        <!-- Date parser in Strings   http://natty.joestelmach.com -->
+        <dependency>
+            <groupId>com.joestelmach</groupId>
+            <artifactId>natty</artifactId>
+            <version>0.11</version>
+        </dependency>
+
 
     </dependencies>
 
