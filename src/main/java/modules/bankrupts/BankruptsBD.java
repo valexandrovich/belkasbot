@@ -123,7 +123,8 @@ public class BankruptsBD {
         BankruptRow row;
         int cursor = getUserPointer(userID);
         try {
-            final PreparedStatement preparedStatement = connection.prepareStatement("SELECT * FROM tb_bankrupts_session WHERE userID = ?");
+            final PreparedStatement preparedStatement = connection.prepareStatement("SELECT * FROM tb_bankrupts_session WHERE userID = ?", ResultSet.TYPE_SCROLL_SENSITIVE,
+                    ResultSet.CONCUR_UPDATABLE);
             preparedStatement.setInt(1, userID);
             final ResultSet resultSet = preparedStatement.executeQuery();
             if (resultSet.next()){
