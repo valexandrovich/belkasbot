@@ -59,7 +59,7 @@ public class BankruptsModule extends TelegramLongPollingBot implements IModule {
         } else {
             try {
                 LinkedList<BankruptRow> response = BankruptsService.findByCode(message.getText());
-                if (response.size()>0){
+                if (response != null && response.size()>0){
                     BankruptsBD.clearUserSession(message.getFrom().getId());
                     BankruptsBD.addUserSession(response, message.getFrom().getId());
 
@@ -69,6 +69,11 @@ public class BankruptsModule extends TelegramLongPollingBot implements IModule {
                     sendMessage.setReplyMarkup(getBankruptsButtons(userID));
                     execute(sendMessage);
 
+                } else {
+                    sendMessage.setText(LocalizationService.getString("3_NotExist", userID));
+                    execute(sendMessage);
+                    sendMessage.setText(LocalizationService.getString("3_Welcome", userID));
+                    execute(sendMessage);
                 }
             } catch (InterruptedException e) {
                 e.printStackTrace();
